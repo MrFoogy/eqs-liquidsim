@@ -32,7 +32,7 @@ public class LiquidSystem : JobComponentSystem{
         public NativeArray<float3> particlesForces;
         public NativeArray<float> particlesPressure;
         public NativeArray<float> particlesDensity;
-
+        public NativeArray<int> particleIndices;
         public NativeArray<int> cellOffsetTable;
     }
 
@@ -54,6 +54,19 @@ public class LiquidSystem : JobComponentSystem{
         }
     }
 
+    [BurstCompile]
+    private struct MergeParticles : IJobNativeMultiHashMapMergedSharedKeyIndices {
+        public NativeArray<int> particleIndices;
+
+        public void ExecuteFirst(int index) {
+            particleIndices[index] = index;
+        }
+
+        public void ExecuteNext(int cellIndex, int index) {
+            particleIndices[index] = cellIndex;
+        }
+    }
+
     protected override JobHandle OnUpdate(JobHandle inputDeps) {
         EntityManager.GetAllUniqueSharedComponentData(liquidTypes);
 
@@ -72,6 +85,7 @@ public class LiquidSystem : JobComponentSystem{
             NativeArray<float3> particlesForces = new NativeArray<float3>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             NativeArray<float> particlesPressure = new NativeArray<float>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             NativeArray<float> particlesDensity = new NativeArray<float>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            NativeArray<int> particleIndices = new NativeArray<int>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
             NativeArray<int> cellOffsetTableNative = new NativeArray<int>(cellOffsetTable, Allocator.TempJob);
 
@@ -85,6 +99,7 @@ public class LiquidSystem : JobComponentSystem{
                 particlesForces = particlesForces,
                 particlesPressure = particlesPressure,
                 particlesDensity = particlesDensity,
+                particleIndices = particleIndices,
                 cellOffsetTable = cellOffsetTableNative
             };
             if (cacheIndex > previousParticles.Count - 1) {
@@ -96,6 +111,7 @@ public class LiquidSystem : JobComponentSystem{
                 previousParticles[cacheIndex].particlesForces.Dispose();
                 previousParticles[cacheIndex].particlesPressure.Dispose();
                 previousParticles[cacheIndex].particlesDensity.Dispose();
+                previousParticles[cacheIndex].particleIndices.Dispose();
                 previousParticles[cacheIndex].cellOffsetTable.Dispose();
             }
             previousParticles[cacheIndex] = nextParticle;
@@ -106,9 +122,11 @@ public class LiquidSystem : JobComponentSystem{
             MemsetNativeArray<float> particlesDensityJob = new MemsetNativeArray<float> { Source = particlesDensity, Value = 0f };
             JobHandle particlesDensityJobHandle = particlesDensityJob.Schedule(particleCount, 64, inputDeps);
 
+            MemsetNativeArray<int> particleIndicesJob = new MemsetNativeArray<int> { Source = particleIndices, Value = 0 };
+            JobHandle particleIndicesJobHandle = particleIndicesJob.Schedule(particleCount, 64, inputDeps);
+
             MemsetNativeArray<float3> particlesForceJob = new MemsetNativeArray<float3> { Source = particlesForces, Value = new float3(0f, 0f, 0f) };
             JobHandle particlesForceJobHandle = particlesForceJob.Schedule(particleCount, 64, inputDeps);
-
 
             // Hash the positions
             HashPositions hashPositionsJob = new HashPositions {
@@ -118,12 +136,20 @@ public class LiquidSystem : JobComponentSystem{
             };
             JobHandle hashPositionsJobHandle = hashPositionsJob.Schedule(particleCount, 64, particlesPositionJobHandle);
 
-            JobHandle mergeHandle1 = JobHandle.CombineDependencies(hashPositionsJobHandle, particlesPressureJobHandle, particlesDensityJobHandle);
+            JobHandle mergeHandle0 = JobHandle.CombineDependencies(hashPositionsJobHandle, particleIndicesJobHandle);
+            MergeParticles mergeParticlesJob = new MergeParticles {
+                particleIndices = particleIndices
+            };
+            JobHandle mergeParticlesJobHandle = mergeParticlesJob.Schedule(hashMap, 64, mergeHandle0);
+
+            JobHandle mergeHandle1 = JobHandle.CombineDependencies(mergeParticlesJobHandle, particlesPressureJobHandle, particlesDensityJobHandle);
 
             ComputeDensityPressure computeDensityPressureJob = new ComputeDensityPressure {
                 particlesPosition = copyParticlesPositions,
                 densities = particlesDensity,
                 pressures = particlesPressure,
+                hashMap = hashMap,
+                cellOffsetTable = cellOffsetTableNative,
                 settings = particleSettings
             };
             JobHandle computeDensityPressureJobHandle = computeDensityPressureJob.Schedule(particleCount, 64, mergeHandle1);
@@ -136,6 +162,8 @@ public class LiquidSystem : JobComponentSystem{
                 particlesForces = particlesForces,
                 particlesPressure = particlesPressure,
                 particlesDensity = particlesDensity,
+                hashMap = hashMap,
+                cellOffsetTable = cellOffsetTableNative,
                 settings = particleSettings
             };
             JobHandle computeForcesJobHandle = computeForcesJob.Schedule(particleCount, 64, mergeHandle2);
@@ -162,6 +190,7 @@ public class LiquidSystem : JobComponentSystem{
             previousParticles[i].particlesForces.Dispose();
             previousParticles[i].particlesPressure.Dispose();
             previousParticles[i].particlesDensity.Dispose();
+            previousParticles[i].particleIndices.Dispose();
             previousParticles[i].cellOffsetTable.Dispose();
         }
         previousParticles.Clear();
@@ -173,6 +202,8 @@ public class LiquidSystem : JobComponentSystem{
 
     [BurstCompile]
     private struct ComputeDensityPressure : IJobParallelFor {
+        [ReadOnly] public NativeMultiHashMap<int, int> hashMap;
+        [ReadOnly] public NativeArray<int> cellOffsetTable;
         [ReadOnly] public NativeArray<Translation> particlesPosition;
         [ReadOnly] public LiquidParticle settings;
         public NativeArray<float> densities;
@@ -185,11 +216,24 @@ public class LiquidSystem : JobComponentSystem{
             int particleCount = particlesPosition.Length;
             float3 position = particlesPosition[index].Value;
             float density = 0f;
-            for (int j = 0; j < particleCount; j++) {
-                float3 rij = particlesPosition[j].Value - position;
-                float r2 = math.lengthsq(rij);
-                if (r2 < settings.kernelRadiusSquared) {
-                    density += settings.particleMass * (315.0f / (64.0f * PI * math.pow(settings.kernelRadius, 9.0f))) * math.pow(settings.kernelRadiusSquared - r2, 3.0f);
+            int ci, j, hash;
+            int3 gridOffset;
+            int3 gridPosition = GridHash.Quantize(position, settings.kernelRadius);
+            bool found;
+
+            for (int cell = 0; cell < 27; cell++) {
+                ci = cell * 3;
+                gridOffset = new int3(cellOffsetTable[ci], cellOffsetTable[ci + 2], cellOffsetTable[ci + 2]);
+                hash = GridHash.Hash(gridPosition + gridOffset);
+                NativeMultiHashMapIterator<int> iterator;
+                found = hashMap.TryGetFirstValue(hash, out j, out iterator);
+                while (found) {
+                    float3 rij = particlesPosition[j].Value - position;
+                    float r2 = math.lengthsq(rij);
+                    if (r2 < settings.kernelRadiusSquared) {
+                        density += settings.particleMass * (315.0f / (64.0f * PI * math.pow(settings.kernelRadius, 9.0f))) * math.pow(settings.kernelRadiusSquared - r2, 3.0f);
+                    }
+                    found = hashMap.TryGetNextValue(out j, ref iterator);
                 }
             }
 
@@ -200,6 +244,8 @@ public class LiquidSystem : JobComponentSystem{
 
     [BurstCompile]
     private struct ComputeForces : IJobParallelFor {
+        [ReadOnly] public NativeMultiHashMap<int, int> hashMap;
+        [ReadOnly] public NativeArray<int> cellOffsetTable;
         [ReadOnly] public NativeArray<Translation> particlesPosition;
         [ReadOnly] public NativeArray<LiquidParticleVelocity> particlesVelocity;
         [ReadOnly] public NativeArray<float> particlesPressure;
@@ -219,17 +265,34 @@ public class LiquidSystem : JobComponentSystem{
             float3 pressureForce = new float3(0f, 0f, 0f);
             float3 viscosityForce = new float3(0f, 0f, 0f);
 
-            for (int j = 0; j < particleCount; j++) {
-                if (index == j) continue;
-                float3 rij = particlesPosition[j].Value - position;
-                float r2 = math.lengthsq(rij);
-                float r = math.sqrt(r2);
-                if (r < settings.kernelRadius) {
-                    pressureForce += -math.normalize(rij) * settings.particleMass * (pressure + particlesPressure[j]) / (2.0f * density) * 
-                        (-45.0f / (PI * math.pow(settings.kernelRadius, 6.0f))) * math.pow(settings.kernelRadius - r, 2.0f);
+            int ci, hash, j;
+            int3 gridOffset;
+            int3 gridPosition = GridHash.Quantize(position, settings.kernelRadius);
+            bool found;
 
-                    viscosityForce += settings.viscosity * settings.particleMass * (particlesVelocity[j].Value - velocity) / density * 
-                        (45.0f / (PI * math.pow(settings.kernelRadius, 6.0f))) * (settings.kernelRadius - r);
+            for (int cell = 0; cell < 27; cell++) {
+                ci = cell * 3;
+                gridOffset = new int3(cellOffsetTable[ci], cellOffsetTable[ci + 1], cellOffsetTable[ci + 2]);
+                hash = GridHash.Hash(gridPosition + gridOffset);
+                NativeMultiHashMapIterator<int> iterator;
+                found = hashMap.TryGetFirstValue(hash, out j, out iterator);
+                while (found) {
+                    if (index == j) {
+                        found = hashMap.TryGetNextValue(out j, ref iterator);
+                        continue;
+                    }
+                    float3 rij = particlesPosition[j].Value - position;
+                    float r2 = math.lengthsq(rij);
+                    float r = math.sqrt(r2);
+                    if (r < settings.kernelRadius) {
+                        pressureForce += -math.normalize(rij) * settings.particleMass * (pressure + particlesPressure[j]) / (2.0f * density) *
+                            (-45.0f / (PI * math.pow(settings.kernelRadius, 6.0f))) * math.pow(settings.kernelRadius - r, 2.0f);
+
+                        viscosityForce += settings.viscosity * settings.particleMass * (particlesVelocity[j].Value - velocity) / density *
+                            (45.0f / (PI * math.pow(settings.kernelRadius, 6.0f))) * (settings.kernelRadius - r);
+                    }
+
+                    found = hashMap.TryGetNextValue(out j, ref iterator);
                 }
             }
 

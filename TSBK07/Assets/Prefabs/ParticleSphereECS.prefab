@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: -1093645131315384334}
   - component: {fileID: 6282624632015486353}
   - component: {fileID: 3756770967383025008}
-  - component: {fileID: 7839863707249653804}
+  - component: {fileID: -7629813966491193436}
   m_Layer: 0
   m_Name: ParticleSphereECS
   m_TagString: Untagged
@@ -60,12 +60,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_SerializedData:
-    radius: 0.5
-    viscosity: 200
+    radius: 1
+    viscosity: 800
     particleMass: 1
     kernelRadius: 1
     kernelRadiusSquared: 1
-    restDensity: 20
+    restDensity: 100
     gravity: 500
 --- !u!114 &6282624632015486353
 MonoBehaviour:
@@ -101,7 +101,7 @@ MonoBehaviour:
       x: 0
       y: 0
       z: 0
---- !u!114 &7839863707249653804
+--- !u!114 &-7629813966491193436
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -114,8 +114,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_SerializedData:
-    mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
-    material: {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+    mesh: {fileID: 0}
+    material: {fileID: 2100000, guid: 6801613f45bca4841b6eb4409c11a6dc, type: 2}
     subMesh: 0
     layer: 0
     castShadows: 0
