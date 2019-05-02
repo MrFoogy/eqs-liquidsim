@@ -37,7 +37,7 @@ RenderSettings:
   m_ReflectionBounces: 1
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
-  m_Sun: {fileID: 705507994}
+  m_Sun: {fileID: 0}
   m_IndirectSpecularColor: {r: 0.44657898, g: 0.4964133, b: 0.5748178, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
@@ -681,7 +681,7 @@ MonoBehaviour:
     type: 3}
   meshFilter: {fileID: 1317268063}
   liquidMaterial: {fileID: 2100000, guid: 6801613f45bca4841b6eb4409c11a6dc, type: 2}
-  startParticles: 5000
+  startParticles: 4000
   boxSide: 15
 --- !u!4 &1317268062
 Transform:
