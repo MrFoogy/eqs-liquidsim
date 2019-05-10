@@ -7,11 +7,14 @@ using Unity.Mathematics;
 using Unity.Entities;
 using Unity.Burst;
 using Unity.Jobs;
+using Unity.Physics;
+using Unity.Physics.Systems;
 
 /*
  * Code is largely based on: https://medium.com/@leomontes_60748/how-to-implement-a-fluid-simulation-on-the-cpu-with-unity-ecs-job-system-bf90a0f2724f
  */
-[UpdateBefore(typeof(TransformSystemGroup))]
+
+[UpdateBefore(typeof(BuildPhysicsWorld))]
 public class LiquidSystem : JobComponentSystem{
     private EntityQuery particlesQuery;
     private List<LiquidParticle> liquidTypes = new List<LiquidParticle>(10);
@@ -28,7 +31,7 @@ public class LiquidSystem : JobComponentSystem{
     {
         public NativeMultiHashMap<int, int> hashMap;
         public NativeArray<Translation> copyParticlesPosition;
-        public NativeArray<LiquidParticleVelocity> copyParticlesVelocity;
+        public NativeArray<PhysicsVelocity> copyParticlesVelocity;
         public NativeArray<float3> particlesForces;
         public NativeArray<float> particlesPressure;
         public NativeArray<float> particlesDensity;
@@ -90,7 +93,7 @@ public class LiquidSystem : JobComponentSystem{
             NativeArray<int> cellOffsetTableNative = new NativeArray<int>(cellOffsetTable, Allocator.TempJob);
 
             var copyParticlesPositions = particlesQuery.ToComponentDataArray<Translation>(Allocator.TempJob, out var particlesPositionJobHandle);
-            var copyParticlesVelocities = particlesQuery.ToComponentDataArray<LiquidParticleVelocity>(Allocator.TempJob, out var particlesVelocityJobHandle);
+            var copyParticlesVelocities = particlesQuery.ToComponentDataArray<PhysicsVelocity>(Allocator.TempJob, out var particlesVelocityJobHandle);
 
             PreviousParticle nextParticle = new PreviousParticle {
                 hashMap = hashMap,
@@ -169,6 +172,7 @@ public class LiquidSystem : JobComponentSystem{
             JobHandle computeForcesJobHandle = computeForcesJob.Schedule(particleCount, 64, mergeHandle2);
 
             Integrate integrateJob = new Integrate {
+                dt = Time.fixedDeltaTime,
                 particlesPosition = copyParticlesPositions,
                 particlesVelocity = copyParticlesVelocities,
                 particlesDensity = particlesDensity,
@@ -197,7 +201,7 @@ public class LiquidSystem : JobComponentSystem{
     }
 
     protected override void OnCreateManager() {
-        particlesQuery = GetEntityQuery(ComponentType.ReadOnly(typeof(LiquidParticle)), typeof(Translation), typeof(LiquidParticleVelocity));
+        particlesQuery = GetEntityQuery(ComponentType.ReadOnly(typeof(LiquidParticle)), typeof(Translation), typeof(PhysicsVelocity));
     }
 
     [BurstCompile]
@@ -210,7 +214,7 @@ public class LiquidSystem : JobComponentSystem{
         public NativeArray<float> pressures;
 
         private const float PI = 3.14159274F;
-        private const float GAS_CONST = 2000.0f;
+        private const float GAS_CONST = 50.0f;
 
         public void Execute(int index) {
             int particleCount = particlesPosition.Length;
@@ -247,7 +251,7 @@ public class LiquidSystem : JobComponentSystem{
         [ReadOnly] public NativeMultiHashMap<int, int> hashMap;
         [ReadOnly] public NativeArray<int> cellOffsetTable;
         [ReadOnly] public NativeArray<Translation> particlesPosition;
-        [ReadOnly] public NativeArray<LiquidParticleVelocity> particlesVelocity;
+        [ReadOnly] public NativeArray<PhysicsVelocity> particlesVelocity;
         [ReadOnly] public NativeArray<float> particlesPressure;
         [ReadOnly] public NativeArray<float> particlesDensity;
         [ReadOnly] public LiquidParticle settings;
@@ -258,7 +262,7 @@ public class LiquidSystem : JobComponentSystem{
         public void Execute(int index) {
             int particleCount = particlesPosition.Length;
             float3 position = particlesPosition[index].Value;
-            float3 velocity = particlesVelocity[index].Value;
+            float3 velocity = particlesVelocity[index].Linear;
             float pressure = particlesPressure[index];
             float density = particlesDensity[index];
 
@@ -288,7 +292,7 @@ public class LiquidSystem : JobComponentSystem{
                         pressureForce += -math.normalize(rij) * settings.particleMass * (pressure + particlesPressure[j]) / (2.0f * density) *
                             (-45.0f / (PI * math.pow(settings.kernelRadius, 6.0f))) * math.pow(settings.kernelRadius - r, 2.0f);
 
-                        viscosityForce += settings.viscosity * settings.particleMass * (particlesVelocity[j].Value - velocity) / density *
+                        viscosityForce += settings.viscosity * settings.particleMass * (particlesVelocity[j].Linear - velocity) / density *
                             (45.0f / (PI * math.pow(settings.kernelRadius, 6.0f))) * (settings.kernelRadius - r);
                     }
 
@@ -296,42 +300,22 @@ public class LiquidSystem : JobComponentSystem{
                 }
             }
 
-            float3 gravityForce = new float3(0f, -9.81f, 0f) * density * settings.gravity;
-            particlesForces[index] = pressureForce + viscosityForce + gravityForce;
+            //float3 gravityForce = new float3(0f, -9.81f, 0f) * density * settings.gravity;
+            particlesForces[index] = pressureForce + viscosityForce /*+ gravityForce*/;
         }
     }
 
     [BurstCompile]
-    private struct Integrate : IJobForEachWithEntity<Translation, LiquidParticleVelocity> {
+    private struct Integrate : IJobForEachWithEntity<PhysicsVelocity> {
         [ReadOnly] public NativeArray<float3> particlesForces;
         [ReadOnly] public NativeArray<float> particlesDensity;
 
+        public float dt;
         public NativeArray<Translation> particlesPosition;
-        public NativeArray<LiquidParticleVelocity> particlesVelocity;
-        private const float DELTA_TIME = 0.001f;
+        public NativeArray<PhysicsVelocity> particlesVelocity;
 
-        public void Execute(Entity entity, int index, ref Translation translation, ref LiquidParticleVelocity particleVelocity) {
-            float3 position = particlesPosition[index].Value;
-            float3 velocity = particlesVelocity[index].Value;
-
-            velocity += DELTA_TIME * particlesForces[index] / particlesDensity[index];
-            position += DELTA_TIME * velocity;
-            if (position.y < 0f) {
-                position.y = 0f;
-                velocity *= -0.2f;
-            }
-
-            /*
-            particlesVelocity[index] = new LiquidParticleVelocity { Value = velocity };
-            particlesPosition[index] = new Translation { Value = position };
-            */
-
-            translation = new Translation {
-                Value = position
-            };
-            particleVelocity = new LiquidParticleVelocity {
-                Value = velocity
-            };
+        public void Execute(Entity entity, int index, ref PhysicsVelocity particleVelocity) {
+            particleVelocity.Linear += dt * particlesForces[index] / particlesDensity[index];
         }
     }
 
