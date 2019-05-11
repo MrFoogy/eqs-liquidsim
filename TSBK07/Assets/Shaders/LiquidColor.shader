@@ -1,8 +1,8 @@
-﻿Shader "Unlit/BillboardInstancedGeometry"
+﻿Shader "Custom/LiquidColor"
 {
 	Properties
 	{
-		_Color("Color", Color) = (1, 1, 1, 1)
+		_LiquidColor("LiquidColor", Color) = (0.5, 1, 0.5, 1)
 		_Radius("Radius", Float) = 1
 		_Shininess("Shininess", Float) = 10
 	}
@@ -25,7 +25,7 @@
 
 			// Variables
 			float _Radius, _Shininess;
-			float4 _Color;
+			float4 _LiquidColor;
 
             struct appdata
             {
@@ -116,8 +116,8 @@
 				float attenuation = lerp(1.0, oneOverDistance, _WorldSpaceLightPos0.w);
 				float3 lightDirection = _WorldSpaceLightPos0.xyz - worldPos.xyz * _WorldSpaceLightPos0.w;
 
-				float3 ambientLighting = UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
-				float3 diffuseReflection = attenuation * _LightColor0.rgb * _Color.rgb * max(0.0, dot(worldNormal, lightDirection));
+				float3 ambientLighting = UNITY_LIGHTMODEL_AMBIENT.rgb * _LiquidColor.rgb;
+				float3 diffuseReflection = attenuation * _LightColor0.rgb * _LiquidColor.rgb * max(0.0, dot(worldNormal, lightDirection));
 				float3 specularReflection = float3(0.0, 0.0, 0.0);
 				if (dot(worldNormal, lightDirection) >= 0.0) {
 					specularReflection = attenuation * _LightColor0.rgb * pow(max(0.0, dot(reflect(-lightDirection, worldNormal), viewDirection)), _Shininess);
@@ -125,7 +125,7 @@
 				float3 color = ambientLighting + diffuseReflection + specularReflection;
 
 				fragOut o;
-				o.color = float4(color, 1.0);
+				o.color = _LiquidColor;
 				o.depth = clipPos.z / clipPos.w;
 				return o;
             }

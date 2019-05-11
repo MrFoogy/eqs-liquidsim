@@ -1,4 +1,4 @@
-﻿Shader "Unlit/BillboardInstancedGeometry"
+﻿Shader "Custom/LiquidDepth"
 {
 	Properties
 	{
@@ -125,8 +125,10 @@
 				float3 color = ambientLighting + diffuseReflection + specularReflection;
 
 				fragOut o;
-				o.color = float4(color, 1.0);
-				o.depth = clipPos.z / clipPos.w;
+				float depth = clipPos.z / clipPos.w;
+				o.depth = depth;
+				float drawDepth = Linear01Depth(depth);
+				o.color = float4(drawDepth, drawDepth, drawDepth, 1.0);
 				return o;
             }
             ENDCG
