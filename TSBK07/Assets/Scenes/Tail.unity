@@ -193,6 +193,11 @@ MonoBehaviour:
   - {fileID: 92302666728883974}
   convergenceRate: 100
   tailSegmentMoveSpeed: 1
+  sineFrequency: 13.3
+  sineIntensity: 0.38
+  intensityGrowthFactor: 0.15
+  sineSpeed: 15.81
+  sineAxis: {x: 0, y: 1, z: 0}
 --- !u!1 &509962285
 GameObject:
   m_ObjectHideFlags: 0

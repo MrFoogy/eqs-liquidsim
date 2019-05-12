@@ -7,17 +7,22 @@ public class TailController : MonoBehaviour {
     public Transform[] tailBones;
     public float convergenceRate;
     // This essentially nullifies the parent-child transform updates
+    // Also, these do not store any of the sine wave information
     private Quaternion[] previousRotations;
     private Vector3[] previousPositions;
-    private Vector3 previousAttachPos;
+
     private float[] attachDistances;
     public float tailSegmentMoveSpeed;
+    public float sineFrequency;
+    public float sineIntensity;
+    public float intensityGrowthFactor;
+    public float sineSpeed;
+    public Vector3 sineAxis;
 
     void Start() {
         previousRotations = new Quaternion[tailBones.Length];
         previousPositions = new Vector3[tailBones.Length];
         attachDistances = new float[tailBones.Length];
-        previousAttachPos = tailAttachBone.position;
         Transform previous = tailAttachBone;
         for (int i = 0; i < tailBones.Length; i++) {
             previousPositions[i] = tailBones[i].position;
@@ -52,8 +57,23 @@ public class TailController : MonoBehaviour {
         for (int i = 0; i < tailBones.Length; i++) {
             previousPositions[i] = tailBones[i].position;
             previousRotations[i] = tailBones[i].rotation;
-            previousAttachPos = tailAttachBone.position;
         }
+        Vector2 sinPos = new Vector2(0f, 0f);
+        float currentSineIntensity = sineIntensity;
+        for (int i = 0; i < tailBones.Length; i++) {
+            // Find the new x-coordinate for the sine wave
+            float boneLength = attachDistances[i];
+            float newX = sinPos.x + boneLength * sineFrequency;
+            float targetY = Mathf.Sin(newX + sineSpeed * Time.time) * currentSineIntensity;
+            Vector2 delta = new Vector2(newX, targetY) - sinPos;
+            delta = delta.normalized * boneLength * sineFrequency;
+            currentSineIntensity += delta.x * intensityGrowthFactor;
+            float relativeAngle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+            Quaternion newRot = previousRotations[i] * Quaternion.AngleAxis(relativeAngle, sineAxis);
+            tailBones[i].rotation = newRot;
+            sinPos = sinPos + delta;
+        }
+        // Apply sine wave
         /*
         Transform parentBone = tailAttachBone;
         for (int i = 0; i < tailBones.Length; i++) {
