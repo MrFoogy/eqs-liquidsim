@@ -62,13 +62,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_SerializedData:
-    radius: 0.4
-    viscosity: 200
+    viscosity: 150
     particleMass: 5
     kernelRadius: 1.5
     kernelRadiusSquared: 2.25
     restDensity: 32
-    gravity: 500
 --- !u!33 &6477500387308514915
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -76,7 +74,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3789556923622234246}
-  m_Mesh: {fileID: 0}
+  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &9206422100594520700
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -94,7 +92,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 6801613f45bca4841b6eb4409c11a6dc, type: 2}
+  - {fileID: 2100000, guid: c468c9517bd0d0e42a338c911ee75da5, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -194,7 +192,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_MotionType: 0
   m_Mass: 1
-  m_LinearDamping: 0.25
+  m_LinearDamping: 0.3
   m_AngularDamping: 0.05
   m_InitialLinearVelocity:
     x: 0

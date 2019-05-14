@@ -2,7 +2,6 @@
 {
     Properties
     {
-        _DepthTex ("DepthTex", 2D) = "black" {}
         _ColorTex ("ColorTex", 2D) = "black" {}
     }
     SubShader
@@ -41,17 +40,17 @@
                 return o;
             }
 
-            sampler2D _DepthTex;
+            sampler2D _CameraDepthTexture;
             sampler2D _ColorTex;
 
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed4 col = tex2D(_ColorTex, i.uv);
-				float depth = tex2D(_DepthTex, i.uv).r;
+				float depth = Linear01Depth(tex2D(_CameraDepthTexture, i.uv).r);
 				fixed4 merge = 0.5 * col + 0.5 * fixed4(depth, depth, depth, 1.0);
 				merge.a = col.r;
-				return merge;
-                //return fixed4(depth, depth, depth, 1.0);
+				//return merge;
+                return fixed4(depth, depth, depth, 1.0);
 				//return col;
             }
             ENDCG

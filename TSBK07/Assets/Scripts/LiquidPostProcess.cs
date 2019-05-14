@@ -7,7 +7,7 @@ public class LiquidPostProcess : MonoBehaviour {
     public Camera cam;
 
     void Start() {
-        //cam.depthTextureMode = DepthTextureMode.Depth;
+        cam.depthTextureMode = DepthTextureMode.Depth;
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination) {

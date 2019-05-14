@@ -3,13 +3,16 @@
 	Properties
 	{
 		_Color("Color", Color) = (1, 1, 1, 1)
+		_LightStrength("LightStrength", Float) = 0.2
 		_Radius("Radius", Float) = 1
 		_Shininess("Shininess", Float) = 10
+		_Specular("Specular", Float) = 10
 	}
 
 	SubShader
 	{
-		Tags { "RenderType" = "Opaque" }
+		Tags {"Queue" = "Transparent" "RenderType" = "Transparent" "IgnoreProjector" = "True"}
+		Blend One OneMinusSrcAlpha
 		LOD 100
 
 		Pass
@@ -24,13 +27,12 @@
 			#include "UnityLightingCommon.cginc"
 
 			// Variables
-			float _Radius, _Shininess;
+			float _Radius, _Shininess, _LightStrength, _Specular;
 			float4 _Color;
 
             struct appdata
             {
                 float4 vertex : POSITION;
-				float2 tex0 : TEXCOORD0;
             };
 
 			struct g2f 
@@ -116,21 +118,20 @@
 				float attenuation = lerp(1.0, oneOverDistance, _WorldSpaceLightPos0.w);
 				float3 lightDirection = _WorldSpaceLightPos0.xyz - worldPos.xyz * _WorldSpaceLightPos0.w;
 
-				float3 ambientLighting = UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
+				float3 ambientLighting = /*UNITY_LIGHTMODEL_AMBIENT.rgb + */_Color.rgb;
 				float3 diffuseReflection = attenuation * _LightColor0.rgb * _Color.rgb * max(0.0, dot(worldNormal, lightDirection));
 				float3 specularReflection = float3(0.0, 0.0, 0.0);
 				if (dot(worldNormal, lightDirection) >= 0.0) {
-					specularReflection = attenuation * _LightColor0.rgb * pow(max(0.0, dot(reflect(-lightDirection, worldNormal), viewDirection)), _Shininess);
+					specularReflection = attenuation * _LightColor0.rgb * pow(max(0.0, dot(reflect(-lightDirection, worldNormal), viewDirection)), _Shininess) * _Specular;
 				}
-				float3 color = ambientLighting + diffuseReflection + specularReflection;
+				float3 color = ambientLighting + _LightStrength * diffuseReflection + specularReflection;
 
 				fragOut o;
-				o.color = float4(color, 1.0);
+				o.color = float4(color, 1 * (1.0 - r));
 				o.depth = clipPos.z / clipPos.w;
 				return o;
             }
             ENDCG
         }
     }
-	Fallback "Standard"
 }
