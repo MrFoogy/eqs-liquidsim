@@ -1216,7 +1216,7 @@ MonoBehaviour:
   cam: {fileID: 963194227}
   arcIndicator: {fileID: 908920226}
   liquidManager: {fileID: 1317268061}
-  spawnRate: 50
+  spawnRate: 150
   spawnOffset: 1
   velocity: 5
   hSpeedMult: 1.5
