@@ -21,9 +21,9 @@ class Particle {
 }
 
 /*
- * Implementation of SPH
+ * Implementation of SPH (singlethreaded)
  */
-public class Liquid : MonoBehaviour {
+public class LiquidSingleThreaded : MonoBehaviour {
     public GameObject particlePrefab;
 
     // For particle placement

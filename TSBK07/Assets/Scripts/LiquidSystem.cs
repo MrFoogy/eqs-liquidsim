@@ -83,8 +83,6 @@ public class LiquidSystem : JobComponentSystem{
 
             NativeMultiHashMap<int, int> hashMap = new NativeMultiHashMap<int, int>(particleCount, Allocator.TempJob);
 
-            //NativeArray<Translation> particlesPosition = new NativeArray<Translation>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-            //NativeArray<LiquidParticleVelocity> particlesVelocity = new NativeArray<LiquidParticleVelocity>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             NativeArray<float3> particlesForces = new NativeArray<float3>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             NativeArray<float> particlesPressure = new NativeArray<float>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             NativeArray<float> particlesDensity = new NativeArray<float>(particleCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -300,7 +298,7 @@ public class LiquidSystem : JobComponentSystem{
                 }
             }
 
-            //float3 gravityForce = new float3(0f, -9.81f, 0f) * density * settings.gravity;
+            // Gravity is handled by the Physics system
             particlesForces[index] = pressureForce + viscosityForce /*+ gravityForce*/;
         }
     }
@@ -318,13 +316,4 @@ public class LiquidSystem : JobComponentSystem{
             particleVelocity.Linear += dt * particlesForces[index] / particlesDensity[index];
         }
     }
-
-    // Need some other way to apply back??
-    /*
-     [BurstCompile]
-     private struct ApplyPositions : IJobParallelFor {
-        [ReadOnly] public NativeArray<Translation> particlesPosition;
-        [ReadOnly] public NativeArray<LiquidParticleVelocity> particlesVelocity;
-    }
-    */
 }
